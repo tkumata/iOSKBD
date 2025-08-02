@@ -419,7 +419,8 @@ struct KanaKeyboardView: View {
             // Ctrl + Space で日本語入力切り替え（同時送信）
             print("Aあキーが押されました - Ctrl+Space送信")
             // Ctrlキーダウン
-            bleManager.sendControlSequence(ctrl: true, key: 32) // Ctrl+Space
+//            bleManager.sendControlSequence(ctrl: true, key: 32) // Ctrl+Space
+            bleManager.sendASCII(255) // よくないけど未割り当てのコードを送信
         case "、":
             bleManager.sendASCII(44) // カンマ ","
         case "。":
