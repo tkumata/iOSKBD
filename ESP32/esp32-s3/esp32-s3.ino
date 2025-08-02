@@ -153,7 +153,13 @@ void processReceivedData(std::string data) {
       keyboard.press(' ');
       keyboard.releaseAll();
       Serial.println("Sent: CTRL+SPACE");
-      i++; // 次の文字（Space）をスキップ
+      continue;
+    }
+    if (c == 0x0C) {
+      keyboard.press(KEY_LEFT_CTRL);
+      keyboard.press('l');
+      keyboard.releaseAll();
+      Serial.println("Sent: CTRL+L");
       continue;
     }
     

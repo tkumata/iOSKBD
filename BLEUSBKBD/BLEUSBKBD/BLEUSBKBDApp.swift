@@ -274,7 +274,7 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
         if ctrl {
             // Ctrl+キーの組み合わせを送信
             // 多くのシステムではCtrl+文字は文字コード-64で表現される
-            let ctrlKey = key >= 64 ? key - 64 : key
+            let ctrlKey = key >= 96 ? key - 96 : key
             sendASCII(ctrlKey)
         } else {
             sendASCII(key)
@@ -626,19 +626,26 @@ struct EnglishKeyboardView: View {
         print("英数字キーボード入力: \(key), Shift: \(isShiftPressed), Ctrl: \(isCtrlPressed), Alt: \(isAltPressed)")
         
         // 修飾キーの送信
-        if isCtrlPressed {
-            bleManager.sendASCII(17) // Ctrl
-            usleep(10000)
-        }
-        if isAltPressed {
-            bleManager.sendASCII(18) // Alt
-            usleep(10000)
-        }
+//        if isCtrlPressed {
+//            bleManager.sendASCII(17) // Ctrl
+//            usleep(10000)
+//        }
+//        if isAltPressed {
+//            bleManager.sendASCII(18) // Alt
+//            usleep(10000)
+//        }
         
         // 文字の送信
-        if let ascii = key.first?.asciiValue {
-            let finalAscii = isShiftPressed ? getShiftedASCII(ascii) : ascii
-            bleManager.sendASCII(finalAscii)
+//        if let ascii = key.first?.asciiValue {
+//            let finalAscii = isShiftPressed ? getShiftedASCII(ascii) : ascii
+//            bleManager.sendASCII(finalAscii)
+//        }
+        let ascii = (key.first?.asciiValue)!
+        if isShiftPressed {
+            bleManager.sendASCII(getShiftedASCII(ascii))
+        }
+        if isCtrlPressed {
+            bleManager.sendControlSequence(ctrl: true, key: ascii)
         }
         
         // 修飾キーをリセット（トグル動作）
