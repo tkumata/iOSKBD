@@ -195,7 +195,7 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
                 }
                 
                 // テスト送信
-                self.sendTestMessage()
+//                self.sendTestMessage()
                 return
             }
         }
@@ -260,6 +260,24 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
                 // 少し間隔を空ける
                 usleep(50000) // 50ms (少し長めに)
             }
+        }
+    }
+    
+    func sendControlSequence(ctrl: Bool, key: UInt8) {
+        guard isConnected else {
+            print("送信エラー: 未接続")
+            return
+        }
+        
+        print("制御シーケンス送信 - Ctrl: \(ctrl), Key: \(key)")
+        
+        if ctrl {
+            // Ctrl+キーの組み合わせを送信
+            // 多くのシステムではCtrl+文字は文字コード-64で表現される
+            let ctrlKey = key >= 64 ? key - 64 : key
+            sendASCII(ctrlKey)
+        } else {
+            sendASCII(key)
         }
     }
     
@@ -389,6 +407,7 @@ struct KanaKeyboardView: View {
     }
     
     private func handleKeyTap(_ char: String) {
+        print("かなキーボード入力: \(char)")
         switch char {
         case "Space":
             bleManager.sendASCII(32) // Space
@@ -397,13 +416,24 @@ struct KanaKeyboardView: View {
         case "Enter":
             bleManager.sendASCII(13) // Enter
         case "Aあ":
-            // Ctrl + Space で日本語入力切り替え
-            bleManager.sendASCII(17) // Ctrl
-            bleManager.sendASCII(32) // Space
+            // Ctrl + Space で日本語入力切り替え（同時送信）
+            print("Aあキーが押されました - Ctrl+Space送信")
+            // Ctrlキーダウン
+            bleManager.sendControlSequence(ctrl: true, key: 32) // Ctrl+Space
+        case "、":
+            bleManager.sendASCII(44) // カンマ ","
+        case "。":
+            bleManager.sendASCII(46) // ピリオド "."
+        case "ー":
+            bleManager.sendASCII(45) // ハイフン "-"
+        case "？":
+            bleManager.sendASCII(63) // クエスチョン "?"
         default:
             // ひらがなをローマ字に変換して送信
             let romaji = convertToRomaji(char)
-            bleManager.sendString(romaji)
+            if !romaji.isEmpty {
+                bleManager.sendString(romaji)
+            }
         }
     }
     
@@ -433,6 +463,8 @@ struct FlickKeyButton: View {
     
     @State private var dragOffset = CGSize.zero
     @State private var selectedChar = ""
+    @State private var isDragging = false
+    @State private var hasTriggered = false
     
     var body: some View {
         ZStack {
@@ -446,7 +478,7 @@ struct FlickKeyButton: View {
                 )
             
             // フリック候補表示
-            if !selectedChar.isEmpty && flickChars.count > 1 {
+            if !selectedChar.isEmpty && flickChars.count > 1 && isDragging {
                 VStack {
                     if flickChars.count > 2 { Text(flickChars[2]).font(.caption) }
                     HStack {
@@ -460,16 +492,44 @@ struct FlickKeyButton: View {
             }
         }
         .gesture(
-            DragGesture()
+            DragGesture(minimumDistance: 0)
                 .onChanged { value in
-                    dragOffset = value.translation
-                    selectedChar = getFlickChar(for: dragOffset)
+                    if !hasTriggered {
+                        dragOffset = value.translation
+                        let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
+                        
+                        if distance > 15 {
+                            // フリック入力として処理
+                            isDragging = true
+                            selectedChar = getFlickChar(for: dragOffset)
+                        }
+                    }
                 }
-                .onEnded { _ in
-                    let finalChar = selectedChar.isEmpty ? key : selectedChar
-                    onTap(finalChar)
-                    selectedChar = ""
-                    dragOffset = .zero
+                .onEnded { value in
+                    if !hasTriggered {
+                        hasTriggered = true
+                        
+                        let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
+                        
+                        if distance <= 15 {
+                            // タップとして処理
+                            print("タップされたキー: \(key)")
+                            onTap(key)
+                        } else {
+                            // フリック入力として処理
+                            let finalChar = selectedChar.isEmpty ? key : selectedChar
+                            print("フリック入力されたキー: \(finalChar)")
+                            onTap(finalChar)
+                        }
+                        
+                        // 状態をリセット
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            selectedChar = ""
+                            dragOffset = .zero
+                            isDragging = false
+                            hasTriggered = false
+                        }
+                    }
                 }
         )
     }
@@ -498,6 +558,9 @@ struct FlickKeyButton: View {
 // MARK: - English Keyboard View
 struct EnglishKeyboardView: View {
     let bleManager: BLEManager
+    @State private var isShiftPressed = false
+    @State private var isCtrlPressed = false
+    @State private var isAltPressed = false
     
     private let alphabetRows = [
         ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
@@ -513,7 +576,7 @@ struct EnglishKeyboardView: View {
             HStack(spacing: 4) {
                 ForEach(numberRow, id: \.self) { key in
                     KeyButton(text: key) {
-                        bleManager.sendASCII(UInt8(key.unicodeScalars.first!.value))
+                        sendModifiedKey(key)
                     }
                 }
             }
@@ -523,10 +586,17 @@ struct EnglishKeyboardView: View {
                 HStack(spacing: 4) {
                     ForEach(row, id: \.self) { key in
                         KeyButton(text: key) {
-                            bleManager.sendASCII(UInt8(key.unicodeScalars.first!.value))
+                            sendModifiedKey(key)
                         }
                     }
                 }
+            }
+            
+            // 修飾キー行
+            HStack(spacing: 8) {
+                ModifierKeyButton(text: "Shift", isPressed: $isShiftPressed)
+                ModifierKeyButton(text: "Ctrl", isPressed: $isCtrlPressed)
+                ModifierKeyButton(text: "Alt", isPressed: $isAltPressed)
             }
             
             // 機能キー行
@@ -549,6 +619,68 @@ struct EnglishKeyboardView: View {
             }
         }
         .padding()
+    }
+    
+    private func sendModifiedKey(_ key: String) {
+        print("英数字キーボード入力: \(key), Shift: \(isShiftPressed), Ctrl: \(isCtrlPressed), Alt: \(isAltPressed)")
+        
+        // 修飾キーの送信
+        if isCtrlPressed {
+            bleManager.sendASCII(17) // Ctrl
+            usleep(10000)
+        }
+        if isAltPressed {
+            bleManager.sendASCII(18) // Alt
+            usleep(10000)
+        }
+        
+        // 文字の送信
+        if let ascii = key.first?.asciiValue {
+            let finalAscii = isShiftPressed ? getShiftedASCII(ascii) : ascii
+            bleManager.sendASCII(finalAscii)
+        }
+        
+        // 修飾キーをリセット（トグル動作）
+        if isShiftPressed { isShiftPressed = false }
+        if isCtrlPressed { isCtrlPressed = false }
+        if isAltPressed { isAltPressed = false }
+    }
+    
+    private func getShiftedASCII(_ ascii: UInt8) -> UInt8 {
+        switch ascii {
+        case 97...122: // a-z
+            return ascii - 32 // A-Z
+        case 49...57: // 1-9
+            let shiftedNumbers: [UInt8] = [33, 64, 35, 36, 37, 94, 38, 42, 40] // !@#$%^&*(
+            return shiftedNumbers[Int(ascii - 49)]
+        case 48: // 0
+            return 41 // )
+        default:
+            return ascii
+        }
+    }
+}
+
+// MARK: - Modifier Key Button
+struct ModifierKeyButton: View {
+    let text: String
+    @Binding var isPressed: Bool
+    
+    var body: some View {
+        Button(action: {
+            isPressed.toggle()
+        }) {
+            Text(text)
+                .font(.system(size: 14))
+                .frame(width: 50, height: 40)
+                .background(isPressed ? Color.blue.opacity(0.3) : Color.gray.opacity(0.2))
+                .cornerRadius(8)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isPressed ? Color.blue : Color.clear, lineWidth: 2)
+                )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
