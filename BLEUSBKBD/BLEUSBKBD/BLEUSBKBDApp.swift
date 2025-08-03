@@ -45,7 +45,7 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
         DispatchQueue.main.async {
             switch central.state {
             case .poweredOn:
-                self.connectionStatus = "Bluetooth準備完了"
+                self.connectionStatus = "Bluetooth 準備完了"
                 self.startScanning()
             case .poweredOff:
                 self.connectionStatus = "Bluetooth OFF"
@@ -273,7 +273,7 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
         
         if ctrl {
             // Ctrl+キーの組み合わせを送信
-            // 多くのシステムではCtrl+文字は文字コード-64で表現される
+            // 多くのシステムでは Ctrl + 文字は文字コード -64 か -96 で表現される
             let ctrlKey = key >= 96 ? key - 96 : key
             sendASCII(ctrlKey)
         } else {
@@ -388,11 +388,11 @@ struct KanaKeyboardView: View {
     ]
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             ForEach(kanaRows, id: \.self) { row in
                 HStack(spacing: 8) {
                     ForEach(row, id: \.self) { key in
-                        FlickKeyButton(
+                        IOSFlickKeyButton(
                             key: key,
                             flickChars: flickMap[key] ?? [key],
                             onTap: { char in
@@ -403,7 +403,13 @@ struct KanaKeyboardView: View {
                 }
             }
         }
-        .padding()
+        .padding(.horizontal, 8)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(UIColor.systemGray6))
+        )
+        .padding(.horizontal, 4)
     }
     
     private func handleKeyTap(_ char: String) {
@@ -416,9 +422,6 @@ struct KanaKeyboardView: View {
         case "Enter":
             bleManager.sendASCII(13) // Enter
         case "Aあ":
-            // Ctrl + Space で日本語入力切り替え（同時送信）
-            print("Aあキーが押されました - Ctrl+Space送信")
-            // Ctrlキーダウン
 //            bleManager.sendControlSequence(ctrl: true, key: 32) // Ctrl+Space
             bleManager.sendASCII(255) // よくないけど未割り当てのコードを送信
         case "、":
@@ -456,8 +459,8 @@ struct KanaKeyboardView: View {
     }
 }
 
-// MARK: - Flick Key Button
-struct FlickKeyButton: View {
+// MARK: - iOS Style Flick Key Button (かなキーボードのみ)
+struct IOSFlickKeyButton: View {
     let key: String
     let flickChars: [String]
     let onTap: (String) -> Void
@@ -466,53 +469,83 @@ struct FlickKeyButton: View {
     @State private var selectedChar = ""
     @State private var isDragging = false
     @State private var hasTriggered = false
+    @State private var isPressed = false
+    
+    private var isSpecialKey: Bool {
+        return !["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "を", "ん", "、", "。", "ー", "？"].contains(key)
+    }
+    
+    private var keyWidth: CGFloat {
+        return key == "Space" ? 120 : 65
+    }
     
     var body: some View {
         ZStack {
-            Rectangle()
-                .fill(Color.gray.opacity(0.2))
-                .frame(width: 60, height: 50)
-                .cornerRadius(8)
-                .overlay(
-                    Text(selectedChar.isEmpty ? key : selectedChar)
-                        .font(.headline)
+            // キーの背景
+            RoundedRectangle(cornerRadius: 8)
+                .fill(
+                    isPressed ?
+                    Color(UIColor.systemGray3) :
+                    (isSpecialKey ? Color(UIColor.systemGray2) : Color.white)
                 )
+                .shadow(
+                    color: Color.black.opacity(0.15),
+                    radius: 1,
+                    x: 0,
+                    y: 1
+                )
+                .frame(width: keyWidth, height: 45)
             
-            // フリック候補表示
+            // キーのテキスト
+            Text(selectedChar.isEmpty ? getDisplayText(key) : selectedChar)
+                .font(.system(size: getFontSize(key), weight: .medium))
+                .foregroundColor(isSpecialKey ? Color(UIColor.systemGray) : Color.black)
+            
+            // フリック候補表示オーバーレイ
             if !selectedChar.isEmpty && flickChars.count > 1 && isDragging {
-                VStack {
-                    if flickChars.count > 2 { Text(flickChars[2]).font(.caption) }
-                    HStack {
-                        if flickChars.count > 3 { Text(flickChars[3]).font(.caption) }
-                        Spacer()
-                        if flickChars.count > 1 { Text(flickChars[1]).font(.caption) }
-                    }
-                    if flickChars.count > 4 { Text(flickChars[4]).font(.caption) }
-                }
-                .frame(width: 80, height: 70)
+                FlickCandidatesOverlay(
+                    candidates: flickChars,
+                    selectedChar: selectedChar
+                )
             }
         }
+        .scaleEffect(isPressed ? 1.05 : 1.0)
+        .animation(.easeInOut(duration: 0.1), value: isPressed)
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     if !hasTriggered {
+                        if !isPressed {
+                            isPressed = true
+                            // タプティックフィードバック
+                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                            impactFeedback.impactOccurred()
+                        }
+                        
                         dragOffset = value.translation
                         let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
                         
-                        if distance > 15 {
+                        if distance > 20 && flickChars.count > 1 {
                             // フリック入力として処理
                             isDragging = true
-                            selectedChar = getFlickChar(for: dragOffset)
+                            let newSelectedChar = getFlickChar(for: dragOffset)
+                            if selectedChar != newSelectedChar {
+                                selectedChar = newSelectedChar
+                                // フリック時のフィードバック
+                                let selectionFeedback = UISelectionFeedbackGenerator()
+                                selectionFeedback.selectionChanged()
+                            }
                         }
                     }
                 }
                 .onEnded { value in
                     if !hasTriggered {
                         hasTriggered = true
+                        isPressed = false
                         
                         let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
                         
-                        if distance <= 15 {
+                        if distance <= 20 {
                             // タップとして処理
                             print("タップされたキー: \(key)")
                             onTap(key)
@@ -535,10 +568,34 @@ struct FlickKeyButton: View {
         )
     }
     
+    private func getDisplayText(_ key: String) -> String {
+        switch key {
+        case "Space":
+            return "空白"
+        case "Del":
+            return "削除"
+        case "Enter":
+            return "改行"
+        case "Aあ":
+            return "英/あ"
+        default:
+            return key
+        }
+    }
+    
+    private func getFontSize(_ key: String) -> CGFloat {
+        switch key {
+        case "Space", "Del", "Enter", "Aあ":
+            return 13
+        default:
+            return 18
+        }
+    }
+    
     private func getFlickChar(for offset: CGSize) -> String {
         guard flickChars.count > 1 else { return key }
         
-        let threshold: CGFloat = 20
+        let threshold: CGFloat = 25
         
         if abs(offset.width) < threshold && abs(offset.height) < threshold {
             return flickChars[0] // 中央
@@ -553,6 +610,109 @@ struct FlickKeyButton: View {
         }
         
         return flickChars[0]
+    }
+}
+
+// MARK: - Flick Candidates Overlay
+struct FlickCandidatesOverlay: View {
+    let candidates: [String]
+    let selectedChar: String
+    
+    var body: some View {
+        ZStack {
+            // 背景
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(UIColor.systemGray5))
+                .shadow(
+                    color: Color.black.opacity(0.25),
+                    radius: 8,
+                    x: 0,
+                    y: 4
+                )
+                .frame(width: 140, height: 120)
+            
+            // 候補文字配置
+            VStack(spacing: 8) {
+                // 上（う）
+                if candidates.count > 2 {
+                    CandidateCharView(
+                        char: candidates[2],
+                        isSelected: selectedChar == candidates[2]
+                    )
+                } else {
+                    Spacer().frame(height: 24)
+                }
+                
+                HStack(spacing: 12) {
+                    // 左（え）
+                    if candidates.count > 3 {
+                        CandidateCharView(
+                            char: candidates[3],
+                            isSelected: selectedChar == candidates[3]
+                        )
+                    } else {
+                        Spacer().frame(width: 24)
+                    }
+                    
+                    // 中央（あ）
+                    CandidateCharView(
+                        char: candidates[0],
+                        isSelected: selectedChar == candidates[0],
+                        isCenter: true
+                    )
+                    
+                    // 右（い）
+                    if candidates.count > 1 {
+                        CandidateCharView(
+                            char: candidates[1],
+                            isSelected: selectedChar == candidates[1]
+                        )
+                    } else {
+                        Spacer().frame(width: 24)
+                    }
+                }
+                // 下（お）
+                if candidates.count > 4 {
+                    CandidateCharView(
+                        char: candidates[4],
+                        isSelected: selectedChar == candidates[4]
+                    )
+                } else {
+                    Spacer().frame(height: 24)
+                }
+            }
+        }
+        .offset(y: -5) // キーの上に表示
+    }
+}
+
+// MARK: - Candidate Character View
+struct CandidateCharView: View {
+    let char: String
+    let isSelected: Bool
+    let isCenter: Bool
+    
+    init(char: String, isSelected: Bool, isCenter: Bool = false) {
+        self.char = char
+        self.isSelected = isSelected
+        self.isCenter = isCenter
+    }
+    
+    var body: some View {
+        Text(char)
+            .font(.system(size: isCenter ? 22 : 18, weight: isSelected ? .bold : .medium))
+            .foregroundColor(
+                isSelected ?
+                Color.white :
+                (isCenter ? Color.black : Color(UIColor.systemGray))
+            )
+            .frame(width: 24, height: 24)
+            .background(
+                Circle()
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+            .scaleEffect(isSelected ? 1.1 : 1.0)
+            .animation(.easeInOut(duration: 0.1), value: isSelected)
     }
 }
 
@@ -625,27 +785,14 @@ struct EnglishKeyboardView: View {
     private func sendModifiedKey(_ key: String) {
         print("英数字キーボード入力: \(key), Shift: \(isShiftPressed), Ctrl: \(isCtrlPressed), Alt: \(isAltPressed)")
         
-        // 修飾キーの送信
-//        if isCtrlPressed {
-//            bleManager.sendASCII(17) // Ctrl
-//            usleep(10000)
-//        }
-//        if isAltPressed {
-//            bleManager.sendASCII(18) // Alt
-//            usleep(10000)
-//        }
-        
         // 文字の送信
-//        if let ascii = key.first?.asciiValue {
-//            let finalAscii = isShiftPressed ? getShiftedASCII(ascii) : ascii
-//            bleManager.sendASCII(finalAscii)
-//        }
         let ascii = (key.first?.asciiValue)!
         if isShiftPressed {
             bleManager.sendASCII(getShiftedASCII(ascii))
-        }
-        if isCtrlPressed {
+        } else if isCtrlPressed {
             bleManager.sendControlSequence(ctrl: true, key: ascii)
+        } else {
+            bleManager.sendASCII(ascii)
         }
         
         // 修飾キーをリセット（トグル動作）
