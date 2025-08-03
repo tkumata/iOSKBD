@@ -45,7 +45,7 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
         DispatchQueue.main.async {
             switch central.state {
             case .poweredOn:
-                self.connectionStatus = "Bluetooth 準備完了"
+                self.connectionStatus = "Bluetooth準備完了"
                 self.startScanning()
             case .poweredOff:
                 self.connectionStatus = "Bluetooth OFF"
@@ -365,6 +365,9 @@ struct ContentView: View {
 // MARK: - Kana Keyboard View
 struct KanaKeyboardView: View {
     let bleManager: BLEManager
+    @State private var showModifierKeys = false
+    @State private var lastInputChar = ""
+    @State private var modifierKeyTimer: Timer?
     
     private let kanaRows = [
         ["あ", "か", "さ", "た", "な"],
@@ -387,8 +390,70 @@ struct KanaKeyboardView: View {
         "わ": ["わ", "ん"]
     ]
     
+    // 濁音・半濁音対応マップ
+    private let dakutenMap: [String: String] = [
+        "か": "が", "き": "ぎ", "く": "ぐ", "け": "げ", "こ": "ご",
+        "さ": "ざ", "し": "じ", "す": "ず", "せ": "ぜ", "そ": "ぞ",
+        "た": "だ", "ち": "ぢ", "つ": "づ", "て": "で", "と": "ど",
+        "は": "ば", "ひ": "び", "ふ": "ぶ", "へ": "べ", "ほ": "ぼ"
+    ]
+    
+    private let handakutenMap: [String: String] = [
+        "は": "ぱ", "ひ": "ぴ", "ふ": "ぷ", "へ": "ぺ", "ほ": "ぽ"
+    ]
+    
+    // 小書き文字対応マップ
+    private let smallCharMap: [String: String] = [
+        "あ": "ぁ", "い": "ぃ", "う": "ぅ", "え": "ぇ", "お": "ぉ",
+        "や": "ゃ", "ゆ": "ゅ", "よ": "ょ",
+        "つ": "っ", "わ": "ゎ"
+    ]
+    
     var body: some View {
         VStack(spacing: 12) {
+            // 修飾キー行（濁音・半濁音・小書き文字）
+            if showModifierKeys {
+                HStack(spacing: 8) {
+                    // 濁音キー
+                    if dakutenMap[lastInputChar] != nil {
+                        ModifierCharButton(
+                            char: dakutenMap[lastInputChar]!,
+                            label: "゛",
+                            onTap: { char in
+                                handleModifierKeyTap(char)
+                            }
+                        )
+                    }
+                    
+                    // 半濁音キー（は行のみ）
+                    if handakutenMap[lastInputChar] != nil {
+                        ModifierCharButton(
+                            char: handakutenMap[lastInputChar]!,
+                            label: "゜",
+                            onTap: { char in
+                                handleModifierKeyTap(char)
+                            }
+                        )
+                    }
+                    
+                    // 小書き文字キー
+                    if smallCharMap[lastInputChar] != nil {
+                        ModifierCharButton(
+                            char: smallCharMap[lastInputChar]!,
+                            label: "小",
+                            onTap: { char in
+                                handleModifierKeyTap(char)
+                            }
+                        )
+                    }
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            
+            // 通常のキーボード行
             ForEach(kanaRows, id: \.self) { row in
                 HStack(spacing: 8) {
                     ForEach(row, id: \.self) { key in
@@ -414,6 +479,10 @@ struct KanaKeyboardView: View {
     
     private func handleKeyTap(_ char: String) {
         print("かなキーボード入力: \(char)")
+        
+        // 修飾キー表示をリセット
+        hideModifierKeys()
+        
         switch char {
         case "Space":
             bleManager.sendASCII(32) // Space
@@ -422,7 +491,8 @@ struct KanaKeyboardView: View {
         case "Enter":
             bleManager.sendASCII(13) // Enter
         case "Aあ":
-//            bleManager.sendControlSequence(ctrl: true, key: 32) // Ctrl+Space
+            // Ctrl + Space で日本語入力切り替え（同時送信）
+            print("Aあキーが押されました - Ctrl+Space送信")
             bleManager.sendASCII(255) // よくないけど未割り当てのコードを送信
         case "、":
             bleManager.sendASCII(44) // カンマ ","
@@ -437,12 +507,60 @@ struct KanaKeyboardView: View {
             let romaji = convertToRomaji(char)
             if !romaji.isEmpty {
                 bleManager.sendString(romaji)
+                
+                // 濁音・半濁音・小書き文字が可能な文字の場合、修飾キーを表示
+                if canShowModifierKeys(for: char) {
+                    showModifierKeysFor(char)
+                }
             }
         }
     }
     
+    private func handleModifierKeyTap(_ char: String) {
+        print("修飾キー入力: \(char)")
+        
+        // 前の文字を削除（Backspace）
+        bleManager.sendASCII(8)
+        usleep(30000) // 30ms待機
+        
+        // 修飾後の文字を送信
+        let romaji = convertToRomaji(char)
+        if !romaji.isEmpty {
+            bleManager.sendString(romaji)
+        }
+        
+        // 修飾キーを非表示
+        hideModifierKeys()
+    }
+    
+    private func canShowModifierKeys(for char: String) -> Bool {
+        return dakutenMap[char] != nil || handakutenMap[char] != nil || smallCharMap[char] != nil
+    }
+    
+    private func showModifierKeysFor(_ char: String) {
+        lastInputChar = char
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showModifierKeys = true
+        }
+        
+        // 3秒後に自動的に非表示
+        modifierKeyTimer?.invalidate()
+        modifierKeyTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+            hideModifierKeys()
+        }
+    }
+    
+    private func hideModifierKeys() {
+        modifierKeyTimer?.invalidate()
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showModifierKeys = false
+        }
+        lastInputChar = ""
+    }
+    
     private func convertToRomaji(_ hiragana: String) -> String {
         let romajiMap: [String: String] = [
+            // 基本文字
             "あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
             "か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
             "さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
@@ -453,9 +571,70 @@ struct KanaKeyboardView: View {
             "や": "ya", "ゆ": "yu", "よ": "yo",
             "ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
             "わ": "wa", "ん": "nn", "を": "wo",
+            
+            // 濁音
+            "が": "ga", "ぎ": "gi", "ぐ": "gu", "げ": "ge", "ご": "go",
+            "ざ": "za", "じ": "ji", "ず": "zu", "ぜ": "ze", "ぞ": "zo",
+            "だ": "da", "ぢ": "di", "づ": "du", "で": "de", "ど": "do",
+            "ば": "ba", "び": "bi", "ぶ": "bu", "べ": "be", "ぼ": "bo",
+            
+            // 半濁音
+            "ぱ": "pa", "ぴ": "pi", "ぷ": "pu", "ぺ": "pe", "ぽ": "po",
+            
+            // 小書き文字
+            "ぁ": "xa", "ぃ": "xi", "ぅ": "xu", "ぇ": "xe", "ぉ": "xo",
+            "ゃ": "xya", "ゅ": "xyu", "ょ": "xyo",
+            "っ": "xtu", "ゎ": "xwa",
+            
+            // 記号
             "、": ",", "。": ".", "ー": "-", "？": "?"
         ]
         return romajiMap[hiragana] ?? hiragana
+    }
+}
+
+// MARK: - Modifier Character Button
+struct ModifierCharButton: View {
+    let char: String
+    let label: String
+    let onTap: (String) -> Void
+    @State private var isPressed = false
+    
+    var body: some View {
+        Button(action: {
+            onTap(char)
+        }) {
+            VStack(spacing: 2) {
+                Text(char)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.black)
+                Text(label)
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+            .frame(width: 50, height: 40)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isPressed ? Color(UIColor.systemGray3) : Color.white)
+                    .shadow(
+                        color: Color.black.opacity(0.1),
+                        radius: 1,
+                        x: 0,
+                        y: 1
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .onLongPressGesture(minimumDuration: 0, maximumDistance: .infinity, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) {
+                isPressed = pressing
+            }
+            if pressing {
+                let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                impactFeedback.impactOccurred()
+            }
+        }, perform: {})
     }
 }
 
@@ -671,6 +850,7 @@ struct FlickCandidatesOverlay: View {
                         Spacer().frame(width: 24)
                     }
                 }
+                
                 // 下（お）
                 if candidates.count > 4 {
                     CandidateCharView(
@@ -682,7 +862,7 @@ struct FlickCandidatesOverlay: View {
                 }
             }
         }
-        .offset(y: -5) // キーの上に表示
+        .offset(y: -80) // キーの上に表示
     }
 }
 
