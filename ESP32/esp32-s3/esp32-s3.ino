@@ -147,12 +147,19 @@ void processReceivedData(std::string data) {
     }
 
     // Ctrl+Space の組み合わせ（「Aあ」キー用）
-    if (i + 1 < data.length() && c == 0x11 && data[i + 1] == 0x20) { 
+    // if (i + 1 < data.length() && c == 0x11 && data[i + 1] == 0x20) {
+    if (c == 0xff) {
       keyboard.press(KEY_LEFT_CTRL);
       keyboard.press(' ');
       keyboard.releaseAll();
       Serial.println("Sent: CTRL+SPACE");
-      i++; // 次の文字（Space）をスキップ
+      continue;
+    }
+    if (c == 0x0C) {
+      keyboard.press(KEY_LEFT_CTRL);
+      keyboard.press('l');
+      keyboard.releaseAll();
+      Serial.println("Sent: CTRL+L");
       continue;
     }
     
@@ -335,12 +342,12 @@ void setup() {
   Serial.println("USB HID Keyboard initialized");
   
   // テスト用のキー送信
-  Serial.println("Testing USB keyboard...");
-  delay(2000); // PCに認識される時間を与える
-  keyboard.print("USB Keyboard Test - ");
-  delay(500);
-  keyboard.println("Ready!");
-  Serial.println("USB keyboard test completed");
+  // Serial.println("Testing USB keyboard...");
+  // delay(2000); // PCに認識される時間を与える
+  // keyboard.print("USB Keyboard Test - ");
+  // delay(500);
+  // keyboard.println("Ready!");
+  // Serial.println("USB keyboard test completed");
 
   // BLEデバイスの初期化
   BLEDevice::init("ESP32-Keyboard");
@@ -399,16 +406,16 @@ void loop() {
   }
 
   // シリアル入力からのテスト機能
-  if (Serial.available()) {
-    String testInput = Serial.readString();
-    testInput.trim();
-    Serial.print("Serial test input: ");
-    Serial.println(testInput);
+  // if (Serial.available()) {
+  //   String testInput = Serial.readString();
+  //   testInput.trim();
+  //   Serial.print("Serial test input: ");
+  //   Serial.println(testInput);
     
-    // シリアル入力をキーボードに送信（テスト用）
-    keyboard.print(testInput);
-    Serial.println("Test input sent to keyboard");
-  }
+  //   // シリアル入力をキーボードに送信（テスト用）
+  //   keyboard.print(testInput);
+  //   Serial.println("Test input sent to keyboard");
+  // }
 
   // アドバタイジング状態の定期チェック
   static unsigned long lastCheck = 0;
