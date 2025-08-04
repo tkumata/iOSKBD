@@ -5,7 +5,7 @@
 Arduino Nano ESP32 を用いて iPhone をパソコンの HID デバイス (キーボード) にする。
 
 ```text
-iPhone -- BLE --> Arduino Nano ESP32 -- USB --> PC
+iPhone -- (BLE) --> Arduino Nano ESP32 -- (USB) --> PC
 ```
 
 iPhone が BLE セントラルで Arduino Nano ESP32 がペリフェラルで、接続後は iPhone が ASCII コードを Arduino Nano ESP32 に送信し Arduino Nano ESP32 はスキャンコードを HID デバイスとして PC に送信する。
@@ -39,5 +39,5 @@ iPhone が BLE セントラルで Arduino Nano ESP32 がペリフェラルで、
 - USBHID は上記のボードマネージャと競合するから不要。
   - esp32 by Espressif Systems を入れた場合は USBHID ライブラリを入れておく。
 - Arduino Nano ESP32 は DFU モードにする。
-  - boot ボタンを押しっぱで電源に接続
+  - Arduino Nano ESP32 の boot ボタンを押しっぱで電源に接続
   - Mac の場合、/dev/tty.cuXXXXXXXXXXXX になる。
