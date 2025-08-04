@@ -2,30 +2,42 @@
 
 ## 概要
 
-Arduino Nano ESP32 を用いて iPhone をパソコンの HID デバイスにする。
+Arduino Nano ESP32 を用いて iPhone をパソコンの HID デバイス (キーボード) にする。
+
+```text
+iPhone -- (BLE) --> Arduino Nano ESP32 -- (USB) --> PC
+```
+
+iPhone が BLE セントラルで Arduino Nano ESP32 がペリフェラルで、接続後は iPhone が ASCII コードを Arduino Nano ESP32 に送信し Arduino Nano ESP32 はスキャンコードを HID デバイスとして PC に送信する。
+
+![screenshot1](./docs/IMG_0445.jpeg)
+![screenshot2](./docs/IMG_0446.jpeg)
 
 ## 準備
 
-- Arduino IDE
-- Arduino Nano ESP32
+- [Arduino Nano ESP32](https://docs.arduino.cc/hardware/nano-esp32/)
+- [Arduino IDE 2](https://docs.arduino.cc/software/ide-v2/tutorials/getting-started-ide-v2/)
 - iPhone
 - Apple Silicone Mac
 - Xcode
 
-## Arduino IDE
+## Setup Arduino IDE 2
 
-### ボードマネージャ
+### ボードマネージャの選択
 
-- Arduino ESP32 Boards by Arduino
+- **Arduino ESP32 Boards** by Arduino
 
-### ライブラリ
+### ライブラリの選択
 
 - 何も入れない
 
 注意:
 
-- esp32 by Espressif Systems は表記が Arduino ESP32 なので注意が必要。これは dev 版なので入れない。
-- USBHID は競合するから不要。
-- Arduino Nano ESP32 は DFU モードにする (基本、boot ボタンを押しっぱで電源に接続)
-
-あああああiPhoneからtype
+- esp32 by Espressif Systems は表記が Arduino ESP32 で紛らわしいので注意。
+- 技術的検証など行う場合は esp32 by Espressif Systems をインストールする。
+  - Arduino ESP32 Boards by Arduino は削除する。
+- USBHID は上記のボードマネージャと競合するから不要。
+  - esp32 by Espressif Systems を入れた場合は USBHID ライブラリを入れておく。
+- Arduino Nano ESP32 は DFU モードにする。
+  - Arduino Nano ESP32 の boot ボタンを押しっぱで電源に接続
+  - Mac の場合、/dev/tty.cuXXXXXXXXXXXX になる。
