@@ -370,10 +370,10 @@ struct KanaKeyboardView: View {
     @State private var modifierKeyTimer: Timer?
     
     private let kanaRows = [
-        ["あ", "か", "さ", "た", "な"],
-        ["は", "ま", "や", "ら", "わ"],
-        ["を", "ん", "、", "。", "ー"],
-        ["？", "Aあ", "Space", "Del", "Enter"]
+        ["あ", "か", "さ", "た"],
+        ["な", "は", "ま", "や"],
+        ["ら", "わ", "ん", "、"],
+        ["Aあ", "Space", "Del", "Enter"]
     ]
     
     // フリック対応の文字マップ
@@ -387,7 +387,8 @@ struct KanaKeyboardView: View {
         "ま": ["ま", "み", "む", "め", "も"],
         "や": ["や", "ゆ", "よ"],
         "ら": ["ら", "り", "る", "れ", "ろ"],
-        "わ": ["わ", "ん"]
+        "わ": ["わ", "ん"],
+        "、": ["、", "。", "ー"]
     ]
     
     // 濁音・半濁音対応マップ
@@ -455,7 +456,7 @@ struct KanaKeyboardView: View {
             
             // 通常のキーボード行
             ForEach(kanaRows, id: \.self) { row in
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ForEach(row, id: \.self) { key in
                         IOSFlickKeyButton(
                             key: key,
@@ -490,6 +491,9 @@ struct KanaKeyboardView: View {
             bleManager.sendASCII(8) // Backspace
         case "Enter":
             bleManager.sendASCII(13) // Enter
+        case "123":
+            // 数字キーボードに切り替える処理を実装する必要がある
+            print("数字キーボード切り替え")
         case "Aあ":
             // Ctrl + Space で日本語入力切り替え（同時送信）
             print("Aあキーが押されました - Ctrl+Space送信")
@@ -612,15 +616,19 @@ struct ModifierCharButton: View {
                     .font(.system(size: 10))
                     .foregroundColor(.gray)
             }
-            .frame(width: 50, height: 40)
+            .frame(width: 60, height: 50)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isPressed ? Color(UIColor.systemGray3) : Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                    )
                     .shadow(
-                        color: Color.black.opacity(0.1),
-                        radius: 1,
+                        color: Color.black.opacity(0.25),
+                        radius: 2,
                         x: 0,
-                        y: 1
+                        y: 2
                     )
             )
         }
@@ -651,29 +659,40 @@ struct IOSFlickKeyButton: View {
     @State private var isPressed = false
     
     private var isSpecialKey: Bool {
-        return !["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "を", "ん", "、", "。", "ー", "？"].contains(key)
+        return !["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "ん", "、", "。"].contains(key)
     }
     
     private var keyWidth: CGFloat {
-        return key == "Space" ? 120 : 65
+        switch key {
+        case "Space":
+            return 120
+        case "Del", "123", "Aあ", "Enter":
+            return 70
+        default:
+            return 70
+        }
     }
     
     var body: some View {
         ZStack {
             // キーの背景
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(
                     isPressed ?
                     Color(UIColor.systemGray3) :
                     (isSpecialKey ? Color(UIColor.systemGray2) : Color.white)
                 )
-                .shadow(
-                    color: Color.black.opacity(0.15),
-                    radius: 1,
-                    x: 0,
-                    y: 1
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
                 )
-                .frame(width: keyWidth, height: 45)
+                .shadow(
+                    color: Color.black.opacity(0.25),
+                    radius: 2,
+                    x: 0,
+                    y: 2
+                )
+                .frame(width: keyWidth, height: 50)
             
             // キーのテキスト
             Text(selectedChar.isEmpty ? getDisplayText(key) : selectedChar)
@@ -757,6 +776,8 @@ struct IOSFlickKeyButton: View {
             return "改行"
         case "Aあ":
             return "英/あ"
+        case "123":
+            return "123"
         default:
             return key
         }
@@ -764,10 +785,10 @@ struct IOSFlickKeyButton: View {
     
     private func getFontSize(_ key: String) -> CGFloat {
         switch key {
-        case "Space", "Del", "Enter", "Aあ":
-            return 13
+        case "Space", "Del", "Enter", "Aあ", "123":
+            return 16
         default:
-            return 18
+            return 22
         }
     }
     
@@ -916,7 +937,7 @@ struct EnglishKeyboardView: View {
             // 数字行
             HStack(spacing: 4) {
                 ForEach(numberRow, id: \.self) { key in
-                    KeyButton(text: key) {
+                    KeyButton(text: key, width: 35) {
                         sendModifiedKey(key)
                     }
                 }
@@ -926,7 +947,7 @@ struct EnglishKeyboardView: View {
             ForEach(alphabetRows, id: \.self) { row in
                 HStack(spacing: 4) {
                     ForEach(row, id: \.self) { key in
-                        KeyButton(text: key) {
+                        KeyButton(text: key, width: 35) {
                             sendModifiedKey(key)
                         }
                     }
@@ -935,9 +956,11 @@ struct EnglishKeyboardView: View {
             
             // 修飾キー行
             HStack(spacing: 8) {
+                Spacer()
                 ModifierKeyButton(text: "Shift", isPressed: $isShiftPressed)
                 ModifierKeyButton(text: "Ctrl", isPressed: $isCtrlPressed)
                 ModifierKeyButton(text: "Alt", isPressed: $isAltPressed)
+                Spacer()
             }
             
             // 機能キー行
@@ -1006,10 +1029,21 @@ struct ModifierKeyButton: View {
             isPressed.toggle()
         }) {
             Text(text)
-                .font(.system(size: 14))
-                .frame(width: 50, height: 40)
-                .background(isPressed ? Color.blue.opacity(0.3) : Color.gray.opacity(0.2))
-                .cornerRadius(8)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.black)
+                .frame(width: 60, height: 50)
+                .background(isPressed ? Color.blue.opacity(0.3) : Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                )
+                .cornerRadius(6)
+                .shadow(
+                    color: Color.black.opacity(0.25),
+                    radius: 2,
+                    x: 0,
+                    y: 2
+                )
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(isPressed ? Color.blue : Color.clear, lineWidth: 2)
@@ -1034,7 +1068,7 @@ struct SymbolKeyboardView: View {
             ForEach(symbolRows, id: \.self) { row in
                 HStack(spacing: 4) {
                     ForEach(row, id: \.self) { key in
-                        KeyButton(text: key) {
+                        KeyButton(text: key, width: 35) {
                             bleManager.sendASCII(UInt8(key.unicodeScalars.first!.value))
                         }
                     }
@@ -1043,13 +1077,13 @@ struct SymbolKeyboardView: View {
             
             // 機能キー
             HStack(spacing: 8) {
-                KeyButton(text: "Space", width: 200) {
+                KeyButton(text: "Space", width: 180) {
                     bleManager.sendASCII(32) // Space
                 }
-                KeyButton(text: "Del", width: 80) {
+                KeyButton(text: "Del", width: 70) {
                     bleManager.sendASCII(8) // Backspace
                 }
-                KeyButton(text: "Enter", width: 80) {
+                KeyButton(text: "Enter", width: 70) {
                     bleManager.sendASCII(13) // Enter
                 }
             }
@@ -1073,10 +1107,21 @@ struct KeyButton: View {
     var body: some View {
         Button(action: action) {
             Text(text)
-                .font(.system(size: 16))
-                .frame(width: width, height: 40)
-                .background(Color.gray.opacity(0.2))
-                .cornerRadius(8)
+                .font(.system(size: 18, weight: .medium))
+                .foregroundColor(.black)
+                .frame(width: width, height: 50)
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
+                )
+                .cornerRadius(6)
+                .shadow(
+                    color: Color.black.opacity(0.25),
+                    radius: 2,
+                    x: 0,
+                    y: 2
+                )
         }
         .buttonStyle(PlainButtonStyle())
     }
