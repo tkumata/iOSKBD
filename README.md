@@ -24,7 +24,7 @@ Arduino Nano ESP32 が無線ドングルとして動き、iPhone がキーボー
 - Apple Silicone Mac
 - Xcode
 
-## Setup Arduino IDE 2
+## Arduino IDE 2
 
 ### ボードマネージャの選択
 
