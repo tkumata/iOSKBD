@@ -304,61 +304,71 @@ struct ContentView: View {
     @State private var currentKeyboard: KeyboardType = .kana
     
     var body: some View {
-        VStack {
-            // 接続状態表示
-            VStack(alignment: .leading) {
-                HStack {
-                    Circle()
-                        .fill(bleManager.isConnected ? Color.green : Color.red)
-                        .frame(width: 10, height: 10)
-                    Text(bleManager.connectionStatus)
-                        .font(.caption)
-                    Spacer()
-                    Button("再スキャン") {
-                        bleManager.startScanning()
-                    }
-                    .font(.caption)
-                }
-                
-                // 発見したデバイス一覧
-                if !bleManager.discoveredDevices.isEmpty {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                // 上部エリア（接続状態とキーボード切り替え）
+                VStack(spacing: 0) {
+                    // 接続状態表示
                     VStack(alignment: .leading) {
-                        Text("発見されたデバイス:")
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                        ForEach(bleManager.discoveredDevices.prefix(5), id: \.self) { device in
-                            Text("• \(device)")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
+                        HStack {
+                            Circle()
+                                .fill(bleManager.isConnected ? Color.green : Color.red)
+                                .frame(width: 10, height: 10)
+                            Text(bleManager.connectionStatus)
+                                .font(.caption)
+                            Spacer()
+                            Button("再スキャン") {
+                                bleManager.startScanning()
+                            }
+                            .font(.caption)
+                        }
+                        
+                        // 発見したデバイス一覧
+                        if !bleManager.discoveredDevices.isEmpty {
+                            VStack(alignment: .leading) {
+                                Text("発見されたデバイス:")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                                ForEach(bleManager.discoveredDevices.prefix(5), id: \.self) { device in
+                                    Text("• \(device)")
+                                        .font(.caption2)
+                                        .foregroundColor(.blue)
+                                }
+                            }
                         }
                     }
+                    .padding()
+                    
+                    // キーボード切り替えタブ
+                    HStack(spacing: 32) {
+                        Button("あ") { currentKeyboard = .kana }
+                            .foregroundColor(currentKeyboard == .kana ? .blue : .gray)
+                        Button("A") { currentKeyboard = .english }
+                            .foregroundColor(currentKeyboard == .english ? .blue : .gray)
+                        Button("#") { currentKeyboard = .symbol }
+                            .foregroundColor(currentKeyboard == .symbol ? .blue : .gray)
+                    }
+                    .padding()
                 }
+                
+                Spacer()
+                
+                // キーボード表示（画面下部固定）
+                VStack(spacing: 0) {
+                    switch currentKeyboard {
+                    case .kana:
+                        KanaKeyboardView(bleManager: bleManager)
+                    case .english:
+                        EnglishKeyboardView(bleManager: bleManager)
+                    case .symbol:
+                        SymbolKeyboardView(bleManager: bleManager)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, geometry.safeAreaInsets.bottom)
             }
-            .padding()
-            
-            // キーボード切り替えタブ
-            HStack(spacing: 32) {
-                Button("あ") { currentKeyboard = .kana }
-                    .foregroundColor(currentKeyboard == .kana ? .blue : .gray)
-                Button("A") { currentKeyboard = .english }
-                    .foregroundColor(currentKeyboard == .english ? .blue : .gray)
-                Button("#") { currentKeyboard = .symbol }
-                    .foregroundColor(currentKeyboard == .symbol ? .blue : .gray)
-            }
-            .padding()
-            
-            // キーボード表示
-            switch currentKeyboard {
-            case .kana:
-                KanaKeyboardView(bleManager: bleManager)
-            case .english:
-                EnglishKeyboardView(bleManager: bleManager)
-            case .symbol:
-                SymbolKeyboardView(bleManager: bleManager)
-            }
-            
-            Spacer()
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
 
@@ -411,8 +421,33 @@ struct KanaKeyboardView: View {
     ]
     
     var body: some View {
-        VStack(spacing: 12) {
-            // 修飾キー行（濁音・半濁音・小書き文字）
+        ZStack(alignment: .top) {
+            // 通常のキーボード（常に同じ位置に固定）
+            VStack(spacing: 12) {
+                ForEach(kanaRows, id: \.self) { row in
+                    HStack(spacing: 6) {
+                        ForEach(row, id: \.self) { key in
+                            IOSFlickKeyButton(
+                                key: key,
+                                flickChars: flickMap[key] ?? [key],
+                                onTap: { char in
+                                    handleKeyTap(char)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 12)
+            .padding(.top, showModifierKeys ? 60 : 0) // 修飾キーのスペースを確保
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(UIColor.systemGray6))
+            )
+            .padding(.horizontal, 4)
+            
+            // 修飾キー行（絶対配置でオーバーレイ）
             if showModifierKeys {
                 HStack(spacing: 8) {
                     // 濁音キー
@@ -450,32 +485,11 @@ struct KanaKeyboardView: View {
                     
                     Spacer()
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
-            
-            // 通常のキーボード行
-            ForEach(kanaRows, id: \.self) { row in
-                HStack(spacing: 6) {
-                    ForEach(row, id: \.self) { key in
-                        IOSFlickKeyButton(
-                            key: key,
-                            flickChars: flickMap[key] ?? [key],
-                            onTap: { char in
-                                handleKeyTap(char)
-                            }
-                        )
-                    }
-                }
-            }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(UIColor.systemGray6))
-        )
-        .padding(.horizontal, 4)
     }
     
     private func handleKeyTap(_ char: String) {
