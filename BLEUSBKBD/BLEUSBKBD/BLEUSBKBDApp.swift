@@ -953,7 +953,7 @@ struct EnglishKeyboardView: View {
             // 数字行
             HStack(spacing: 4) {
                 ForEach(numberRow, id: \.self) { key in
-                    KeyButton(text: key, width: 35) {
+                    KeyButton(text: key, width: 32) {
                         sendModifiedKey(key)
                     }
                 }
@@ -963,7 +963,7 @@ struct EnglishKeyboardView: View {
             ForEach(alphabetRows, id: \.self) { row in
                 HStack(spacing: 4) {
                     ForEach(row, id: \.self) { key in
-                        KeyButton(text: key, width: 35) {
+                        KeyButton(text: key, width: 32) {
                             sendModifiedKey(key)
                         }
                     }
@@ -973,9 +973,9 @@ struct EnglishKeyboardView: View {
             // 修飾キー行
             HStack(spacing: 8) {
                 Spacer()
-                ModifierKeyButton(text: "Shift", isPressed: $isShiftPressed)
-                ModifierKeyButton(text: "Ctrl", isPressed: $isCtrlPressed)
-                ModifierKeyButton(text: "Alt", isPressed: $isAltPressed)
+                ModifierKeyButton(text: "⇧ Shift", isPressed: $isShiftPressed)
+                ModifierKeyButton(text: "^ Ctrl", isPressed: $isCtrlPressed)
+                ModifierKeyButton(text: "⌥ ALT", isPressed: $isAltPressed)
                 Spacer()
             }
             
@@ -1047,7 +1047,7 @@ struct ModifierKeyButton: View {
             Text(text)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.black)
-                .frame(width: 60, height: 50)
+                .frame(width: 100, height: 50)
                 .background(isPressed ? Color.blue.opacity(0.3) : Color.white)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)
@@ -1084,7 +1084,7 @@ struct SymbolKeyboardView: View {
             ForEach(symbolRows, id: \.self) { row in
                 HStack(spacing: 4) {
                     ForEach(row, id: \.self) { key in
-                        KeyButton(text: key, width: 35) {
+                        KeyButton(text: key, width: 32) {
                             bleManager.sendASCII(UInt8(key.unicodeScalars.first!.value))
                         }
                     }
