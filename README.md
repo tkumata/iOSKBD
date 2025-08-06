@@ -10,9 +10,9 @@ iPhone -- (BLE) --> Arduino Nano ESP32 -- (USB) --> PC
 
 iPhone が BLE セントラルで Arduino Nano ESP32 がペリフェラルで、接続後は iPhone が ASCII コードを Arduino Nano ESP32 に送信し Arduino Nano ESP32 はスキャンコードを HID デバイスとして PC に送信する。
 
-![screenshot1](./docs/IMG_0448.jpeg)
-![screenshot2](./docs/IMG_0449.jpeg)
-![screenshot3](./docs/IMG_0450.jpeg)
+![screenshot1](./docs/IMG_0451.jpeg)
+![screenshot2](./docs/IMG_0452.jpeg)
+![screenshot3](./docs/IMG_0453.jpeg)
 
 ## 準備
 
