@@ -376,17 +376,17 @@ struct KanaKeyboardView: View {
         ["Aあ", "Space", "Del", "Enter"]
     ]
     
-    // フリック対応の文字マップ
+    // フリック対応の文字マップ（右と左を入れ替え：中央, 左, 上, 右, 下）
     private let flickMap: [String: [String]] = [
-        "あ": ["あ", "い", "う", "え", "お"],
-        "か": ["か", "き", "く", "け", "こ"],
-        "さ": ["さ", "し", "す", "せ", "そ"],
-        "た": ["た", "ち", "つ", "て", "と"],
-        "な": ["な", "に", "ぬ", "ね", "の"],
-        "は": ["は", "ひ", "ふ", "へ", "ほ"],
-        "ま": ["ま", "み", "む", "め", "も"],
+        "あ": ["あ", "え", "う", "い", "お"],
+        "か": ["か", "け", "く", "き", "こ"],
+        "さ": ["さ", "せ", "す", "し", "そ"],
+        "た": ["た", "て", "つ", "ち", "と"],
+        "な": ["な", "ね", "ぬ", "に", "の"],
+        "は": ["は", "へ", "ふ", "ひ", "ほ"],
+        "ま": ["ま", "め", "む", "み", "も"],
         "や": ["や", "ゆ", "よ"],
-        "ら": ["ら", "り", "る", "れ", "ろ"],
+        "ら": ["ら", "れ", "る", "り", "ろ"],
         "わ": ["わ", "ん"],
         "、": ["、", "。", "ー"]
     ]
@@ -723,7 +723,7 @@ struct IOSFlickKeyButton: View {
                         dragOffset = value.translation
                         let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
                         
-                        if distance > 20 && flickChars.count > 1 {
+                        if distance > 15 && flickChars.count > 1 {
                             // フリック入力として処理
                             isDragging = true
                             let newSelectedChar = getFlickChar(for: dragOffset)
@@ -732,6 +732,11 @@ struct IOSFlickKeyButton: View {
                                 // フリック時のフィードバック
                                 let selectionFeedback = UISelectionFeedbackGenerator()
                                 selectionFeedback.selectionChanged()
+                            }
+                        } else {
+                            // 短い距離の場合は中央文字を選択
+                            if selectedChar != flickChars[0] {
+                                selectedChar = flickChars[0]
                             }
                         }
                     }
@@ -743,7 +748,7 @@ struct IOSFlickKeyButton: View {
                         
                         let distance = sqrt(value.translation.width * value.translation.width + value.translation.height * value.translation.height)
                         
-                        if distance <= 20 {
+                        if distance <= 15 {
                             // タップとして処理
                             print("タップされたキー: \(key)")
                             onTap(key)
@@ -795,21 +800,33 @@ struct IOSFlickKeyButton: View {
     private func getFlickChar(for offset: CGSize) -> String {
         guard flickChars.count > 1 else { return key }
         
-        let threshold: CGFloat = 25
+        let threshold: CGFloat = 15
         
-        if abs(offset.width) < threshold && abs(offset.height) < threshold {
+        // 優先度による方向判定
+        let absWidth = abs(offset.width)
+        let absHeight = abs(offset.height)
+        
+        // 中央判定（閾値未満）
+        if absWidth < threshold && absHeight < threshold {
             return flickChars[0] // 中央
-        } else if offset.height < -threshold && abs(offset.width) < threshold {
-            return flickChars.count > 2 ? flickChars[2] : flickChars[0] // 上
-        } else if offset.width > threshold && abs(offset.height) < threshold {
-            return flickChars.count > 1 ? flickChars[1] : flickChars[0] // 右
-        } else if offset.height > threshold && abs(offset.width) < threshold {
-            return flickChars.count > 4 ? flickChars[4] : flickChars[0] // 下
-        } else if offset.width < -threshold && abs(offset.height) < threshold {
-            return flickChars.count > 3 ? flickChars[3] : flickChars[0] // 左
         }
         
-        return flickChars[0]
+        // 方向判定（より大きな移動量を優先）
+        if absHeight > absWidth {
+            // 縦方向が優勢
+            if offset.height < 0 {
+                return flickChars.count > 2 ? flickChars[2] : flickChars[0] // 上
+            } else {
+                return flickChars.count > 4 ? flickChars[4] : flickChars[0] // 下
+            }
+        } else {
+            // 横方向が優勢
+            if offset.width > 0 {
+                return flickChars.count > 1 ? flickChars[1] : flickChars[0] // 右
+            } else {
+                return flickChars.count > 3 ? flickChars[3] : flickChars[0] // 左
+            }
+        }
     }
 }
 
