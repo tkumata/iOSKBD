@@ -337,7 +337,7 @@ struct ContentView: View {
             .padding()
             
             // キーボード切り替えタブ
-            HStack {
+            HStack(spacing: 32) {
                 Button("あ") { currentKeyboard = .kana }
                     .foregroundColor(currentKeyboard == .kana ? .blue : .gray)
                 Button("A") { currentKeyboard = .english }
@@ -370,10 +370,10 @@ struct KanaKeyboardView: View {
     @State private var modifierKeyTimer: Timer?
     
     private let kanaRows = [
-        ["あ", "か", "さ", "た"],
-        ["な", "は", "ま", "や"],
-        ["ら", "わ", "ん", "、"],
-        ["Aあ", "Space", "Del", "Enter"]
+        ["あ", "か", "さ", "Del"],
+        ["た", "な", "は", "Space"],
+        ["ま", "や", "ら", "Enter"],
+        ["わ", "、", "Aあ", "Enter"]
     ]
     
     // フリック対応の文字マップ（右と左を入れ替え：中央, 左, 上, 右, 下）
@@ -388,7 +388,7 @@ struct KanaKeyboardView: View {
         "や": ["や", "ゆ", "よ"],
         "ら": ["ら", "れ", "る", "り", "ろ"],
         "わ": ["わ", "ん"],
-        "、": ["、", "。", "ー"]
+        "、": ["、", "。", "ー", "？"]
     ]
     
     // 濁音・半濁音対応マップ
@@ -495,7 +495,6 @@ struct KanaKeyboardView: View {
             // 数字キーボードに切り替える処理を実装する必要がある
             print("数字キーボード切り替え")
         case "Aあ":
-            // Ctrl + Space で日本語入力切り替え（同時送信）
             print("Aあキーが押されました - Ctrl+Space送信")
             bleManager.sendASCII(255) // よくないけど未割り当てのコードを送信
         case "、":
@@ -665,7 +664,7 @@ struct IOSFlickKeyButton: View {
     private var keyWidth: CGFloat {
         switch key {
         case "Space":
-            return 120
+            return 70
         case "Del", "123", "Aあ", "Enter":
             return 70
         default:
