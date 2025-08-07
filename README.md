@@ -17,10 +17,10 @@ iPhone が BLE セントラルで Arduino Nano ESP32 が BLE ペリフェラル�
 
 以下のイメージです。
 
-| This Proj.                   | Commercial keyboard |
-| ---------------------------- | ------------------- |
-| Arduino Nano ESP32 Bluetooth | Wireless dongle     |
-| iPhone                       | Keyboard            |
+| This Proj.              | Commercial keyboard |
+| ----------------------- | ------------------- |
+| Arduino Nano ESP32 (BT) | Wireless dongle     |
+| iPhone (App)            | Keyboard (Physics)  |
 
 ## Pros
 
