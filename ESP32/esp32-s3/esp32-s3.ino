@@ -5,12 +5,37 @@
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 
-// デバッグ用フラグ
-#define DEBUG_USB_KEYBOARD
+// デバッグ用フラグ - リリース時は無効にしてメモリ・パフォーマンス向上
+// #define DEBUG_ENABLED
+#ifdef DEBUG_ENABLED
+  #define DEBUG_PRINT(x) Serial.print(x)
+  #define DEBUG_PRINTLN(x) Serial.println(x)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+#endif
 
 // BLE設定
 #define SERVICE_UUID        "12345678-1234-1234-1234-123456789abc"
 #define CHARACTERISTIC_UUID "87654321-4321-4321-4321-cba987654321"
+
+// 特殊キーコード定数
+#define KEY_ESC_CODE         0x1B
+#define KEY_TAB_CODE         0x09
+#define KEY_BACKSPACE_CODE   0x08
+#define KEY_ENTER_CODE1      0x0D
+#define KEY_ENTER_CODE2      0x0A
+#define KEY_SPACE_CODE       0x20
+#define KEY_CTRL_SPACE_CODE  0xFF
+#define KEY_CTRL_L_CODE      0x0C
+#define KEY_CTRL_CODE        0x11
+#define KEY_ALT_CODE         0x12
+#define KEY_SHIFT_CODE       0x10
+
+// タイミング設定
+#define KEY_PRESS_DELAY      30  // キー入力間隔（ms）
+#define INIT_DELAY           500 // 初期化待機時間
+#define CONNECTION_CHECK_INTERVAL 10000 // 接続状態チェック間隔
 
 // グローバル変数
 BLEServer* pServer = NULL;
@@ -20,201 +45,211 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false;
 
 // 関数の前方宣言
-void processReceivedData(std::string data);
+void processReceivedData(String data);
+bool sendSpecialKey(char c);
+void sendModifierKey(char c);
 void sendSymbol(char c);
+void sendCharacter(char c);
 
 // 接続状態管理用コールバック
 class MyServerCallbacks: public BLEServerCallbacks {
     void onConnect(BLEServer* pServer) {
       deviceConnected = true;
-      Serial.println("=== BLE Device Connected ===");
-      Serial.print("Connected devices: ");
-      Serial.println(pServer->getConnectedCount());
+      DEBUG_PRINTLN("=== BLE Device Connected ===");
+      DEBUG_PRINT("Connected devices: ");
+      DEBUG_PRINTLN(pServer->getConnectedCount());
       
       // 接続確認用のテストメッセージ
       if (pCharacteristic != NULL) {
-        std::string testMsg = "ESP32 Ready";
-        pCharacteristic->setValue(testMsg);
+        String testMsg = "ESP32 Ready";
+        pCharacteristic->setValue(testMsg.c_str());
         pCharacteristic->notify();
-        Serial.println("Sent ready notification to iPhone");
+        DEBUG_PRINTLN("Sent ready notification to iPhone");
       }
     };
 
     void onDisconnect(BLEServer* pServer) {
       deviceConnected = false;
-      Serial.println("=== BLE Device Disconnected ===");
-      Serial.print("Remaining connected devices: ");
-      Serial.println(pServer->getConnectedCount());
+      DEBUG_PRINTLN("=== BLE Device Disconnected ===");
+      DEBUG_PRINT("Remaining connected devices: ");
+      DEBUG_PRINTLN(pServer->getConnectedCount());
     }
 };
 
 // データ受信コールバック
 class MyCallbacks: public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-      Serial.println("=== BLE Data Received ===");
+      DEBUG_PRINTLN("=== BLE Data Received ===");
       std::string rxValue = pCharacteristic->getValue();
+      String data = String(rxValue.c_str());
       
-      Serial.print("Data length: ");
-      Serial.println(rxValue.length());
+      DEBUG_PRINT("Data length: ");
+      DEBUG_PRINTLN(data.length());
 
-      if (rxValue.length() > 0) {
-        Serial.print("Raw data (HEX): ");
-        for (int i = 0; i < rxValue.length(); i++) {
-          Serial.print("0x");
-          Serial.print((uint8_t)rxValue[i], HEX);
-          Serial.print(" ");
+      if (data.length() > 0) {
+        #ifdef DEBUG_ENABLED
+        DEBUG_PRINT("Raw data (HEX): ");
+        for (int i = 0; i < data.length(); i++) {
+          DEBUG_PRINT("0x");
+          DEBUG_PRINT((uint8_t)data[i]);
+          DEBUG_PRINT(" ");
         }
-        Serial.println();
+        DEBUG_PRINTLN();
         
-        Serial.print("Raw data (ASCII): ");
-        for (int i = 0; i < rxValue.length(); i++) {
-          if (rxValue[i] >= 32 && rxValue[i] <= 126) {
-            Serial.print((char)rxValue[i]);
+        DEBUG_PRINT("Raw data (ASCII): ");
+        for (int i = 0; i < data.length(); i++) {
+          if (data[i] >= 32 && data[i] <= 126) {
+            DEBUG_PRINT((char)data[i]);
           } else {
-            Serial.print("[");
-            Serial.print((uint8_t)rxValue[i]);
-            Serial.print("]");
+            DEBUG_PRINT("[");
+            DEBUG_PRINT((uint8_t)data[i]);
+            DEBUG_PRINT("]");
           }
         }
-        Serial.println();
+        DEBUG_PRINTLN();
+        #endif
 
         // 受信したデータを処理
-        processReceivedData(rxValue);
+        processReceivedData(data);
       } else {
-        Serial.println("Empty data received");
+        DEBUG_PRINTLN("Empty data received");
       }
-      Serial.println("=== BLE Processing End ===");
+      DEBUG_PRINTLN("=== BLE Processing End ===");
     }
     
     void onRead(BLECharacteristic *pCharacteristic) {
-      Serial.println("BLE Read request received");
+      DEBUG_PRINTLN("BLE Read request received");
     }
 };
 
-// ASCIIコードをスキャンコードに変換して送信
-void processReceivedData(std::string data) {
-  Serial.print("Processing data: ");
-  for (int i = 0; i < data.length(); i++) {
-    Serial.print("0x");
-    Serial.print((uint8_t)data[i], HEX);
-    Serial.print(" ");
+// 特殊キーの処理
+bool sendSpecialKey(char c) {
+  switch (c) {
+    case KEY_ESC_CODE:
+      keyboard.press(KEY_ESC);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: ESC");
+      return true;
+    case KEY_TAB_CODE:
+      keyboard.press(KEY_TAB);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: TAB");
+      return true;
+    case KEY_BACKSPACE_CODE:
+      keyboard.press(KEY_BACKSPACE);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: BACKSPACE");
+      return true;
+    case KEY_ENTER_CODE1:
+    case KEY_ENTER_CODE2:
+      keyboard.press(KEY_RETURN);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: ENTER");
+      return true;
+    case KEY_SPACE_CODE:
+      keyboard.press(' ');
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: SPACE");
+      return true;
+    case KEY_CTRL_SPACE_CODE:
+      keyboard.press(KEY_LEFT_CTRL);
+      keyboard.press(' ');
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: CTRL+SPACE");
+      return true;
+    case KEY_CTRL_L_CODE:
+      keyboard.press(KEY_LEFT_CTRL);
+      keyboard.press('l');
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: CTRL+L");
+      return true;
+    default:
+      return false;
   }
-  Serial.println();
+}
+
+// 修飾キーの処理
+void sendModifierKey(char c) {
+  switch (c) {
+    case KEY_CTRL_CODE:
+      keyboard.press(KEY_LEFT_CTRL);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: CTRL");
+      break;
+    case KEY_ALT_CODE:
+      keyboard.press(KEY_LEFT_ALT);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: ALT");
+      break;
+    case KEY_SHIFT_CODE:
+      keyboard.press(KEY_LEFT_SHIFT);
+      keyboard.releaseAll();
+      DEBUG_PRINTLN("Sent: SHIFT");
+      break;
+  }
+}
+
+// 通常文字の処理
+void sendCharacter(char c) {
+  if (c >= 'a' && c <= 'z') {
+    keyboard.press(c);
+    keyboard.releaseAll();
+    DEBUG_PRINT("Sent char: ");
+    DEBUG_PRINTLN(c);
+  }
+  else if (c >= 'A' && c <= 'Z') {
+    keyboard.press(KEY_LEFT_SHIFT);
+    keyboard.press(c - 'A' + 'a');
+    keyboard.releaseAll();
+    DEBUG_PRINT("Sent SHIFT+");
+    DEBUG_PRINTLN((char)(c - 'A' + 'a'));
+  }
+  else if (c >= '0' && c <= '9') {
+    keyboard.press(c);
+    keyboard.releaseAll();
+    DEBUG_PRINT("Sent number: ");
+    DEBUG_PRINTLN(c);
+  }
+  else {
+    DEBUG_PRINT("Sending symbol: ");
+    DEBUG_PRINTLN(c);
+    sendSymbol(c);
+  }
+}
+
+// ASCIIコードをスキャンコードに変換して送信（最適化版）
+void processReceivedData(String data) {
+  #ifdef DEBUG_ENABLED
+  DEBUG_PRINT("Processing data: ");
+  for (int i = 0; i < data.length(); i++) {
+    DEBUG_PRINT("0x");
+    DEBUG_PRINT((uint8_t)data[i]);
+    DEBUG_PRINT(" ");
+  }
+  DEBUG_PRINTLN();
+  #endif
 
   for (int i = 0; i < data.length(); i++) {
     char c = data[i];
     
-    Serial.print("Sending key: ");
-    Serial.print(c);
-    Serial.print(" (0x");
-    Serial.print((uint8_t)c, HEX);
-    Serial.println(")");
+    DEBUG_PRINT("Sending key: ");
+    DEBUG_PRINT(c);
+    DEBUG_PRINT(" (0x");
+    DEBUG_PRINT((uint8_t)c);
+    DEBUG_PRINTLN(")");
     
-    // 特殊なコマンドの処理
-    if (c == 0x1B) { // ESC
-      keyboard.press(KEY_ESC);
-      keyboard.releaseAll();
-      Serial.println("Sent: ESC");
-      continue;
-    }
-    
-    if (c == 0x09) { // Tab
-      keyboard.press(KEY_TAB);
-      keyboard.releaseAll();
-      Serial.println("Sent: TAB");
-      continue;
+    // 特殊キー → 修飾キー → 通常文字の順で処理
+    if (sendSpecialKey(c)) {
+      // 処理済み
+    } else if (c == KEY_CTRL_CODE || c == KEY_ALT_CODE || c == KEY_SHIFT_CODE) {
+      sendModifierKey(c);
+    } else {
+      sendCharacter(c);
     }
     
-    if (c == 0x08) { // Backspace (Del)
-      keyboard.press(KEY_BACKSPACE);
-      keyboard.releaseAll();
-      Serial.println("Sent: BACKSPACE");
-      continue;
-    }
-    
-    if (c == 0x0D || c == 0x0A) { // Enter
-      keyboard.press(KEY_RETURN);
-      keyboard.releaseAll();
-      Serial.println("Sent: ENTER");
-      continue;
-    }
-    
-    if (c == 0x20) { // Space
-      keyboard.press(' ');
-      keyboard.releaseAll();
-      Serial.println("Sent: SPACE");
-      continue;
-    }
-
-    // Ctrl+Space の組み合わせ（「Aあ」キー用）
-    // if (i + 1 < data.length() && c == 0x11 && data[i + 1] == 0x20) {
-    if (c == 0xff) {
-      keyboard.press(KEY_LEFT_CTRL);
-      keyboard.press(' ');
-      keyboard.releaseAll();
-      Serial.println("Sent: CTRL+SPACE");
-      continue;
-    }
-    if (c == 0x0C) {
-      keyboard.press(KEY_LEFT_CTRL);
-      keyboard.press('l');
-      keyboard.releaseAll();
-      Serial.println("Sent: CTRL+L");
-      continue;
-    }
-    
-    // 修飾キーの処理
-    if (c == 0x11) { // Ctrl
-      keyboard.press(KEY_LEFT_CTRL);
-      keyboard.releaseAll();
-      Serial.println("Sent: CTRL");
-      continue;
-    }
-    
-    if (c == 0x12) { // Alt
-      keyboard.press(KEY_LEFT_ALT);
-      keyboard.releaseAll();
-      Serial.println("Sent: ALT");
-      continue;
-    }
-    
-    if (c == 0x10) { // Shift
-      keyboard.press(KEY_LEFT_SHIFT);
-      keyboard.releaseAll();
-      Serial.println("Sent: SHIFT");
-      continue;
-    }
-
-    // 通常の文字・数字・記号の処理
-    if (c >= 'a' && c <= 'z') {
-      keyboard.press(c);
-      keyboard.releaseAll();
-      Serial.print("Sent char: ");
-      Serial.println(c);
-    }
-    else if (c >= 'A' && c <= 'Z') {
-      keyboard.press(KEY_LEFT_SHIFT);
-      keyboard.press(c - 'A' + 'a'); // 小文字に変換してShiftと組み合わせ
-      keyboard.releaseAll();
-      Serial.print("Sent SHIFT+");
-      Serial.println((char)(c - 'A' + 'a'));
-    }
-    else if (c >= '0' && c <= '9') {
-      keyboard.press(c);
-      keyboard.releaseAll();
-      Serial.print("Sent number: ");
-      Serial.println(c);
-    }
-    else {
-      // 記号の処理
-      Serial.print("Sending symbol: ");
-      Serial.println(c);
-      sendSymbol(c);
-    }
-    
-    delay(50); // キー入力間隔を少し長めに
+    delay(KEY_PRESS_DELAY);
   }
-  Serial.println("Data processing completed");
+  DEBUG_PRINTLN("Data processing completed");
 }
 
 // 記号の送信処理
@@ -327,27 +362,21 @@ void sendSymbol(char c) {
 }
 
 void setup() {
+  #ifdef DEBUG_ENABLED
   Serial.begin(115200);
-  Serial.println("Starting BLE to USB Keyboard Bridge...");
-  delay(1000); // 初期化待機
+  DEBUG_PRINTLN("Starting BLE to USB Keyboard Bridge...");
+  #endif
+  delay(INIT_DELAY); // 初期化待機
 
   // USB初期化を最初に行う
   USB.begin();
-  delay(500);
+  delay(INIT_DELAY);
   
   // USB HIDキーボードの初期化
   keyboard.begin();
-  delay(1000); // キーボード初期化待機
+  delay(INIT_DELAY * 2); // キーボード初期化待機
   
-  Serial.println("USB HID Keyboard initialized");
-  
-  // テスト用のキー送信
-  // Serial.println("Testing USB keyboard...");
-  // delay(2000); // PCに認識される時間を与える
-  // keyboard.print("USB Keyboard Test - ");
-  // delay(500);
-  // keyboard.println("Ready!");
-  // Serial.println("USB keyboard test completed");
+  DEBUG_PRINTLN("USB HID Keyboard initialized");
 
   // BLEデバイスの初期化
   BLEDevice::init("ESP32-Keyboard");
@@ -383,50 +412,40 @@ void setup() {
   // アドバタイジング開始
   pServer->getAdvertising()->start();
   
-  Serial.println("BLE Peripheral ready and advertising...");
-  Serial.println("Device name: ESP32-Keyboard");
-  Serial.println("Service UUID: " + String(SERVICE_UUID));
-  Serial.println("Waiting for iPhone connection...");
+  DEBUG_PRINTLN("BLE Peripheral ready and advertising...");
+  DEBUG_PRINTLN("Device name: ESP32-Keyboard");
+  DEBUG_PRINTLN("Service UUID: " + String(SERVICE_UUID));
+  DEBUG_PRINTLN("Waiting for iPhone connection...");
 }
 
 void loop() {
   // 接続状態の変化を監視
   if (!deviceConnected && oldDeviceConnected) {
-    Serial.println("Device disconnected. Restarting advertising...");
-    delay(500); // スタック処理のための短い待機
+    DEBUG_PRINTLN("Device disconnected. Restarting advertising...");
+    delay(INIT_DELAY); // スタック処理のための短い待機
     pServer->getAdvertising()->start(); // 再接続のためのアドバタイジング再開
-    Serial.println("Advertising restarted");
+    DEBUG_PRINTLN("Advertising restarted");
     oldDeviceConnected = deviceConnected;
   }
   
   // 新しい接続を検出
   if (deviceConnected && !oldDeviceConnected) {
-    Serial.println("Device connected successfully");
+    DEBUG_PRINTLN("Device connected successfully");
     oldDeviceConnected = deviceConnected;
   }
 
-  // シリアル入力からのテスト機能
-  // if (Serial.available()) {
-  //   String testInput = Serial.readString();
-  //   testInput.trim();
-  //   Serial.print("Serial test input: ");
-  //   Serial.println(testInput);
-    
-  //   // シリアル入力をキーボードに送信（テスト用）
-  //   keyboard.print(testInput);
-  //   Serial.println("Test input sent to keyboard");
-  // }
-
-  // アドバタイジング状態の定期チェック
+  // アドバタイジング状態の定期チェック（デバッグ時のみ）
+  #ifdef DEBUG_ENABLED
   static unsigned long lastCheck = 0;
-  if (millis() - lastCheck > 10000) { // 10秒ごとにチェック
+  if (millis() - lastCheck > CONNECTION_CHECK_INTERVAL) {
     if (!deviceConnected) {
-      Serial.println("Still advertising and waiting for connection...");
+      DEBUG_PRINTLN("Still advertising and waiting for connection...");
     } else {
-      Serial.println("BLE connected, waiting for data...");
+      DEBUG_PRINTLN("BLE connected, waiting for data...");
     }
     lastCheck = millis();
   }
+  #endif
 
   delay(100);
 }
